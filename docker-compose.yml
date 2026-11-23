@@ -1,0 +1,119 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vibescan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vibescan_local_db_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-vibescan}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vibescan}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      VIBESCAN_ENVIRONMENT: ${VIBESCAN_ENVIRONMENT:-production}
+      VIBESCAN_SECRET_KEY: ${VIBESCAN_SECRET_KEY:?Set VIBESCAN_SECRET_KEY (>=32 random chars) in .env}
+      VIBESCAN_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vibescan}:${POSTGRES_PASSWORD:-vibescan_local_db_pass}@postgres:5432/${POSTGRES_DB:-vibescan}
+      VIBESCAN_REDIS_URL: redis://redis:6379/0
+      VIBESCAN_TASK_BACKEND: ${VIBESCAN_TASK_BACKEND:-arq}
+      VIBESCAN_DATA_DIR: /app/data
+      VIBESCAN_COOKIE_SECURE: ${VIBESCAN_COOKIE_SECURE:-false}
+      VIBESCAN_BOOTSTRAP_ADMIN_EMAIL: ${VIBESCAN_BOOTSTRAP_ADMIN_EMAIL:-admin@vibescan.org}
+      VIBESCAN_BOOTSTRAP_ADMIN_PASSWORD: ${VIBESCAN_BOOTSTRAP_ADMIN_PASSWORD:-}
+      VIBESCAN_LAB_MODE: ${VIBESCAN_LAB_MODE:-false}
+      VIBESCAN_ALLOW_ATTESTATION_ONLY: ${VIBESCAN_ALLOW_ATTESTATION_ONLY:-false}
+      VIBESCAN_ALLOW_PRIVATE_TARGETS: ${VIBESCAN_ALLOW_PRIVATE_TARGETS:-false}
+      VIBESCAN_PRIVATE_TARGET_ALLOWLIST: ${VIBESCAN_PRIVATE_TARGET_ALLOWLIST:-}
+      VIBESCAN_AI_PROVIDER: ${VIBESCAN_AI_PROVIDER:-disabled}
+      VIBESCAN_AI_MODEL: ${VIBESCAN_AI_MODEL:-gpt-4o-mini}
+      VIBESCAN_OPENAI_API_KEY: ${VIBESCAN_OPENAI_API_KEY:-}
+    volumes:
+      - vibescan_data:/app/data
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["arq", "app.worker.WorkerSettings"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      VIBESCAN_ENVIRONMENT: ${VIBESCAN_ENVIRONMENT:-production}
+      VIBESCAN_SECRET_KEY: ${VIBESCAN_SECRET_KEY:?Set VIBESCAN_SECRET_KEY (>=32 random chars) in .env}
+      VIBESCAN_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vibescan}:${POSTGRES_PASSWORD:-vibescan_local_db_pass}@postgres:5432/${POSTGRES_DB:-vibescan}
+      VIBESCAN_REDIS_URL: redis://redis:6379/0
+      VIBESCAN_TASK_BACKEND: arq
+      VIBESCAN_DATA_DIR: /app/data
+      VIBESCAN_LAB_MODE: ${VIBESCAN_LAB_MODE:-false}
+      VIBESCAN_ALLOW_ATTESTATION_ONLY: ${VIBESCAN_ALLOW_ATTESTATION_ONLY:-false}
+      VIBESCAN_ALLOW_PRIVATE_TARGETS: ${VIBESCAN_ALLOW_PRIVATE_TARGETS:-false}
+      VIBESCAN_PRIVATE_TARGET_ALLOWLIST: ${VIBESCAN_PRIVATE_TARGET_ALLOWLIST:-}
+      VIBESCAN_AI_PROVIDER: ${VIBESCAN_AI_PROVIDER:-disabled}
+      VIBESCAN_AI_MODEL: ${VIBESCAN_AI_MODEL:-gpt-4o-mini}
+      VIBESCAN_OPENAI_API_KEY: ${VIBESCAN_OPENAI_API_KEY:-}
+    volumes:
+      - vibescan_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VIBESCAN_API_URL: http://api:8000
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+
+  # Isolated local test targets (only started when running `docker compose --profile lab up`)
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    profiles: ["lab"]
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  webgoat:
+    image: webgoat/webgoat:latest
+    profiles: ["lab"]
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  postgres_data:
+  redis_data:
+  vibescan_data:

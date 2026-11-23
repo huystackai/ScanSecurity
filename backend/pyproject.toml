@@ -1,0 +1,66 @@
+[project]
+name = "vibescan"
+version = "0.1.0"
+description = "VibeScan - evidence-driven security scanner for AI/vibe-coded web applications"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4",
+  "email-validator>=2.2",
+  "sqlalchemy[asyncio]>=2.0.30,<2.1",
+  "asyncpg>=0.29",
+  "aiosqlite>=0.20",
+  "alembic>=1.13",
+  "redis>=5.0",
+  "arq>=0.26",
+  "httpx>=0.27,<0.29",
+  "httpcore>=1.0.5,<2",
+  "anyio>=4.4",
+  "certifi>=2024.7.4",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.2",
+  "dnspython>=2.6",
+  "argon2-cffi>=23.1",
+  "cryptography>=43",
+  "jinja2>=3.1.4",
+  "cvss>=3.2",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.45"]
+semgrep = ["semgrep>=1.80"]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.6",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["reports/templates/*.j2", "scanner/data/*.txt", "scanner/data/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101", "E501", "B008", "S311", "S110", "S112"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B"]
